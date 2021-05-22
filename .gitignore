@@ -1,21 +1,36 @@
-# the composer package lock file and install directory
-# Commit your application's lock file http://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file
-# You may choose to ignore a library lock file http://getcomposer.org/doc/02-libraries.md#lock-file
-# /composer.lock
-/fuel/vendor
+public function get($paymentType, $carrier, $gds, $clearingCompany, $allowDirectPayment)
+	{
+		AcqData::preload();
 
-# the fuelphp document
-/docs/
+		$carrier = strtoupper($carrier);
+		if($paymentType == 'cc') {
+			$gdsVal = $this->acqData->getGdsVal($gds);
 
-# you may install these packages with `oil package`.
-# http://fuelphp.com/docs/packages/oil/package.html
-# /fuel/packages/auth/
-# /fuel/packages/email/
-# /fuel/packages/oil/
-# /fuel/packages/orm/
-# /fuel/packages/parser/
+			if(!$allowDirectPayment || 
+			   !$gdsVal || 
+			   !isset($gdsVal['lr'], $gdsVal['direct'], $gdsVal['lr_commission_acq'], $gdsVal['direct_commission_acq'])
+			  ) {
+				$ccDefaultVal = $this->acqData->getPaymentTypeVal($paymentType);
+				return [[$ccDefaultVal, $ccDefaultVal], false];
+			}
 
-# dynamically generated files
-/fuel/app/logs/*/*/*
-/fuel/app/cache/*/*
-/fuel/app/config/crypt.php
+			$commission = $gdsVal['direct_commission_acq'];
+			$isDirect = $this->isDirect($carrier, $gds, $clearingCompany);
+			if(!$isDirect) {
+				$gdsVal['direct'] = $gdsVal['lr'];
+				$commission = $gdsVal['lr'];
+			}
+
+			return [
+				[$gdsVal['direct'], $commission],
+				$isDirect
+			];
+		}
+
+		$paymentTypeVal = $this->acqData->getPaymentTypeVal($paymentType);
+
+		return [
+			[$paymentTypeVal, $paymentTypeVal], 
+			false
+		];
+	}
